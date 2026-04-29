@@ -176,21 +176,7 @@ class WPI_Preorder_Order {
 		$order->update_meta_data( '_wpi_preorder_counted', '1' );
 		$order->save();
 
-		// Notify admin if a notification email is configured.
-		$admin_email = get_option( 'wpi_admin_email', '' );
-		if ( $admin_email && is_email( $admin_email ) ) {
-			wp_mail(
-				$admin_email,
-				sprintf( __( '[Preorder placed] Order #%d', 'wpi' ), $order->get_id() ),
-				sprintf(
-					/* translators: 1: order id, 2: order admin URL */
-					__( "A new preorder has been placed.\n\nOrder #%1\$d\nView: %2\$s", 'wpi' ),
-					$order->get_id(),
-					$order->get_edit_order_url()
-				)
-			);
-		}
-
+		// WPI_Email_Admin_Preorder + WPI_Email_Preorder_Confirmation both listen for this action.
 		do_action( 'wpi_preorder_placed', $order->get_id() );
 	}
 

@@ -267,7 +267,8 @@ class WPI_Shipment_Item {
 	}
 
 	/**
-	 * Refuse virtual / downloadable / non-existent products as preorder line items.
+	 * Refuse virtual / downloadable / non-existent products and anything in an excluded
+	 * category (e.g. service / labour / installation) as preorder line items.
 	 */
 	public static function is_eligible_product( int $product_id ): bool {
 		if ( ! $product_id ) {
@@ -280,6 +281,16 @@ class WPI_Shipment_Item {
 		if ( $product->is_virtual() || $product->is_downloadable() ) {
 			return false;
 		}
+
+		$excluded = (array) get_option( 'wpi_excluded_categories', [] );
+		$excluded = array_filter( array_map( 'intval', $excluded ) );
+		if ( $excluded ) {
+			$product_terms = wc_get_product_term_ids( $product_id, 'product_cat' );
+			if ( array_intersect( $excluded, $product_terms ) ) {
+				return false;
+			}
+		}
+
 		return apply_filters( 'wpi_is_eligible_product', true, $product );
 	}
 }

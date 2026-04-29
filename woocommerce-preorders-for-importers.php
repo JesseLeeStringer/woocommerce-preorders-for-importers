@@ -5,7 +5,7 @@
  * Description:       Shipment-based preorder management for WooCommerce importers. Define inbound shipments, set per-product deposit rules and release dates, enforce quantity caps, and release stock via confirmed manual release only.
  * Author:            Jesse Lee Stringer
  * Author URI:        https://github.com/JesseLeeStringer
- * Version:           0.2.0
+ * Version:           0.3.0
  * Requires at least: 6.4
  * Requires PHP:      8.1
  * WC requires at least: 9.0
@@ -20,7 +20,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'WPI_VERSION', '0.2.0' );
+define( 'WPI_VERSION', '0.3.0' );
 define( 'WPI_PLUGIN_FILE', __FILE__ );
 define( 'WPI_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'WPI_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
@@ -87,6 +87,17 @@ function wpi_init() {
 	new WPI_Frontend();
 	new WPI_Shortcodes();
 	new WPI_Emails();
+
+	// Elementor dynamic tags — only when Elementor is active.
+	if ( did_action( 'elementor/loaded' ) || class_exists( '\Elementor\Plugin' ) ) {
+		require_once WPI_PLUGIN_DIR . 'includes/elementor/class-wpi-elementor.php';
+		new WPI_Elementor();
+	} else {
+		add_action( 'elementor/loaded', function () {
+			require_once WPI_PLUGIN_DIR . 'includes/elementor/class-wpi-elementor.php';
+			new WPI_Elementor();
+		} );
+	}
 
 	if ( is_admin() ) {
 		new WPI_Admin_Shipments();

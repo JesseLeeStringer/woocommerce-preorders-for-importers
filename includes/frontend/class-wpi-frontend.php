@@ -7,18 +7,28 @@ if ( ! defined( 'ABSPATH' ) ) {
 class WPI_Frontend {
 
 	public function __construct() {
+		// Single product page: replace add-to-cart label with "Pre-Order — secure with $X deposit".
 		add_filter( 'woocommerce_product_single_add_to_cart_text', [ $this, 'button_label' ], 10, 2 );
-		add_filter( 'woocommerce_product_add_to_cart_text', [ $this, 'button_label' ], 10, 2 );
+
+		// Archive (shop / category / loop): hard-replace the quick-add HTML with a permalink button.
+		// Customers must land on the product page to see shipment terms before ordering — Shotgun's
+		// average order value is high enough that a one-click archive add doesn't make sense.
+		add_filter( 'woocommerce_loop_add_to_cart_link', [ $this, 'archive_preorder_link' ], 10, 2 );
+
+		// Single product page extras.
 		add_action( 'woocommerce_after_add_to_cart_button', [ $this, 'product_page_eta' ] );
 		add_action( 'woocommerce_after_add_to_cart_button', [ $this, 'product_page_availability' ], 11 );
+
+		// Loop badge alongside the archive button.
 		add_action( 'woocommerce_after_shop_loop_item_title', [ $this, 'loop_badge' ], 11 );
+
 		add_action( 'wp_enqueue_scripts', [ $this, 'enqueue' ] );
 	}
 
 	/**
 	 * Quick check using the cached active-product set so we don't hit the DB once per loop iteration.
 	 */
-	private function product_has_preorder( int $product_id ): bool {
+	public function product_has_preorder( int $product_id ): bool {
 		return in_array( $product_id, WPI_Shipment_Item::products_with_active_shipments(), true );
 	}
 
@@ -39,6 +49,23 @@ class WPI_Frontend {
 		);
 
 		return apply_filters( 'wpi_preorder_button_label', $default, $product, $item );
+	}
+
+	/**
+	 * Replace the loop add-to-cart anchor for preorder products with a permalink button.
+	 */
+	public function archive_preorder_link( string $html, WC_Product $product ): string {
+		if ( ! $this->product_has_preorder( $product->get_id() ) ) {
+			return $html;
+		}
+		$label = get_option( 'wpi_archive_button_text', __( 'Pre-Orders Available', 'wpi' ) );
+		$label = apply_filters( 'wpi_archive_button_text', $label, $product );
+
+		return sprintf(
+			'<a href="%s" class="button wpi-archive-button" rel="nofollow">%s</a>',
+			esc_url( $product->get_permalink() ),
+			esc_html( $label )
+		);
 	}
 
 	public function product_page_eta(): void {
@@ -65,7 +92,7 @@ class WPI_Frontend {
 	}
 
 	/**
-	 * Show how many units the customer can preorder before they roll over to the next shipment.
+	 * Show how many units the customer can preorder vs. how many are already on the way.
 	 * No hard cap — orders may exceed allocation; this is purely informational.
 	 */
 	public function product_page_availability(): void {
@@ -73,7 +100,7 @@ class WPI_Frontend {
 		if ( ! $product || ! $this->product_has_preorder( $product->get_id() ) ) {
 			return;
 		}
-		echo do_shortcode( '[wpi_preorder_availability product_id="' . (int) $product->get_id() . '"]' );
+		echo do_shortcode( '[preorder_stock product_id="' . (int) $product->get_id() . '"]' );
 	}
 
 	public function loop_badge(): void {
