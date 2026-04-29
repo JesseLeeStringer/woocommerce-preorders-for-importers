@@ -16,4 +16,4 @@ delete_option( 'wpi_date_format' );
 delete_option( 'wpi_checkout_notice' );
 delete_option( 'wpi_admin_email' );
 
-wp_clear_scheduled_hook( 'wpi_daily_check' );
+// No scheduled hooks to clear — release is always manual.

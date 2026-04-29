@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       WooCommerce Preorders for Importers
  * Plugin URI:        https://github.com/JesseLeeStringer/woocommerce-preorders-for-importers
- * Description:       Shipment-based preorder management for WooCommerce importers. Define inbound shipments, set per-product deposit rules and release dates, enforce quantity caps, and release stock with one click.
+ * Description:       Shipment-based preorder management for WooCommerce importers. Define inbound shipments, set per-product deposit rules and release dates, enforce quantity caps, and release stock via confirmed manual release only.
  * Author:            Jesse Lee Stringer
  * Author URI:        https://github.com/JesseLeeStringer
  * Version:           0.1.0
@@ -34,7 +34,7 @@ function wpi_activate() {
 }
 
 function wpi_deactivate() {
-	wp_clear_scheduled_hook( 'wpi_daily_check' );
+	// Nothing to clean up — release is always manual, no scheduled events.
 }
 
 add_action( 'plugins_loaded', 'wpi_init' );
@@ -71,11 +71,6 @@ function wpi_init() {
 			\Automattic\WooCommerce\Utilities\FeaturesUtil::declare_compatibility( 'custom_order_tables', WPI_PLUGIN_FILE, true );
 		}
 	} );
-
-	// Schedule daily availability cascade check if not already scheduled.
-	if ( ! wp_next_scheduled( 'wpi_daily_check' ) ) {
-		wp_schedule_event( time(), 'daily', 'wpi_daily_check' );
-	}
 
 	new WPI_Preorder_Order();
 	new WPI_Preorder_Cart();
