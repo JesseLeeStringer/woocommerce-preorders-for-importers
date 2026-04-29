@@ -38,13 +38,16 @@
 	min-width: 280px;
 }
 
+/* Archive "Pre-Orders Available" button.
+ * Intentionally non-!important so the active theme's button styles take precedence.
+ * Falls back to these values only if the theme provides no .button rule. */
 .wpi-archive-button {
-	background: #2563eb !important;
-	color: #fff !important;
+	background: #2563eb;
+	color: #fff;
 }
 
 .wpi-archive-button:hover {
-	background: #1d4ed8 !important;
+	background: #1d4ed8;
 }
 
 .wpi-status {

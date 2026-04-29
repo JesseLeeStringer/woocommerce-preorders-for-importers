@@ -11,7 +11,7 @@ class WPI_Tag_Status extends \Elementor\Core\DynamicTags\Tag {
 	}
 
 	public function get_title(): string {
-		return __( 'Preorder Status', 'wpi' );
+		return __( 'POI Status', 'wpi' );
 	}
 
 	public function get_group(): string {

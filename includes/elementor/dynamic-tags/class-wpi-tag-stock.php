@@ -11,7 +11,7 @@ class WPI_Tag_Stock extends \Elementor\Core\DynamicTags\Tag {
 	}
 
 	public function get_title(): string {
-		return __( 'Preorder Stock', 'wpi' );
+		return __( 'POI Stock', 'wpi' );
 	}
 
 	public function get_group(): string {
@@ -29,7 +29,7 @@ class WPI_Tag_Stock extends \Elementor\Core\DynamicTags\Tag {
 				'label'   => __( 'Format', 'wpi' ),
 				'type'    => \Elementor\Controls_Manager::SELECT,
 				'options' => [
-					'text'    => __( 'Single line (5 in stock · 12 inbound 22/06)', 'wpi' ),
+					'text'    => __( 'Labelled rows (In stock: 5 / Available: 12 …)', 'wpi' ),
 					'long'    => __( 'Long form (multi-sentence)', 'wpi' ),
 					'numbers' => __( 'Numbers only (5 · 12)', 'wpi' ),
 				],

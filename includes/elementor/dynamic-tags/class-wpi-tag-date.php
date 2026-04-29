@@ -11,7 +11,7 @@ class WPI_Tag_Date extends \Elementor\Core\DynamicTags\Tag {
 	}
 
 	public function get_title(): string {
-		return __( 'Preorder Arrival Date', 'wpi' );
+		return __( 'POI Arrival Date', 'wpi' );
 	}
 
 	public function get_group(): string {

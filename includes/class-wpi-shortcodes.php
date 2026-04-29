@@ -79,10 +79,12 @@ class WPI_Shortcodes {
 	 * Always shows real-time WC stock alongside preorder allocation, so customers see the
 	 * full picture and aren't discouraged by a "no stock" message when goods are inbound.
 	 *
-	 * Default output (text):
-	 *   "5 in stock now · 12 inbound 22/06 (3 already pre-ordered)"
+	 * Default output (text), one labelled row per line:
+	 *   In stock: 5 <br>
+	 *   Available for pre-order: 12 (arrives 22/06) <br>
+	 *   Already pre-ordered: 3
 	 *
-	 * Use format="numbers" to get just the figures, or format="long" for a multi-line breakdown.
+	 * Use format="numbers" to get just the figures, or format="long" for full sentences.
 	 */
 	public function stock( array $atts ): string {
 		$atts = shortcode_atts( [
@@ -162,37 +164,34 @@ class WPI_Shortcodes {
 			return '<div class="wpi-stock wpi-stock--long">' . esc_html( implode( ' ', $lines ) ) . '</div>';
 		}
 
-		// Default: single-line text format.
-		$bits = [];
+		// Default text format: labelled rows separated by <br>, each on its own line.
+		// Easier for templates to reformat (replace <br> with </p><p>) than commas.
+		$rows = [];
 		if ( $wc_stock !== null ) {
-			$bits[] = sprintf(
-				/* translators: %d: in-stock count */
-				_n( '%d in stock now', '%d in stock now', $wc_stock, 'wpi' ),
-				$wc_stock
+			$rows[] = sprintf(
+				'<span class="wpi-stock__row"><strong>%s:</strong> %d</span>',
+				esc_html__( 'In stock', 'wpi' ),
+				(int) $wc_stock
 			);
 		}
 		if ( $primary ) {
-			$bits[] = sprintf(
-				/* translators: 1: remaining preorder qty, 2: arrival date */
-				_n(
-					'%1$d available for pre-order (arrives %2$s)',
-					'%1$d available for pre-order (arrives %2$s)',
-					$preorder_left,
-					'wpi'
-				),
-				$preorder_left,
-				$arrival
+			$rows[] = sprintf(
+				'<span class="wpi-stock__row"><strong>%s:</strong> %d (%s %s)</span>',
+				esc_html__( 'Available for pre-order', 'wpi' ),
+				(int) $preorder_left,
+				esc_html__( 'arrives', 'wpi' ),
+				esc_html( $arrival )
 			);
 			if ( $preordered > 0 ) {
-				$bits[] = sprintf(
-					/* translators: %d: preordered count */
-					_n( '%d already pre-ordered', '%d already pre-ordered', $preordered, 'wpi' ),
-					$preordered
+				$rows[] = sprintf(
+					'<span class="wpi-stock__row"><strong>%s:</strong> %d</span>',
+					esc_html__( 'Already pre-ordered', 'wpi' ),
+					(int) $preordered
 				);
 			}
 		}
 
-		return '<span class="wpi-stock">' . esc_html( implode( ' · ', $bits ) ) . '</span>';
+		return '<span class="wpi-stock">' . implode( '<br />', $rows ) . '</span>';
 	}
 
 	/**

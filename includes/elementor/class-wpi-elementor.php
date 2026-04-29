@@ -26,10 +26,11 @@ class WPI_Elementor {
 			return;
 		}
 
-		// Group container.
+		// Group container — short marketable name keeps the picker tidy and avoids
+		// collisions with anything else that might claim a generic "Preorder" namespace.
 		if ( method_exists( $manager, 'register_group' ) ) {
 			$manager->register_group( 'wpi-preorder', [
-				'title' => __( 'Preorder', 'wpi' ),
+				'title' => __( 'POI Preorders', 'wpi' ),
 			] );
 		}
 
