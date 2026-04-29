@@ -1,0 +1,66 @@
+name: PHP Lint
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  lint:
+    name: php -l (${{ matrix.php }})
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        # 8.1 is the floor declared in the plugin header.
+        # 8.2 + 8.3 catch new deprecations; 8.4 is opt-in once stable.
+        php: ['8.1', '8.2', '8.3']
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP ${{ matrix.php }}
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          tools: none
+          coverage: none
+
+      - name: Verify PHP version
+        run: php --version
+
+      - name: Lint every PHP file
+        run: |
+          set -e
+          fail=0
+          while IFS= read -r -d '' file; do
+            if ! out=$(php -l "$file" 2>&1); then
+              echo "::error file=$file::$out"
+              fail=1
+            elif ! echo "$out" | grep -q "No syntax errors"; then
+              echo "::error file=$file::Unexpected lint output: $out"
+              fail=1
+            fi
+          done < <(find . -path ./vendor -prune -o -path ./node_modules -prune -o -name '*.php' -print0)
+          if [ "$fail" -ne 0 ]; then
+            exit 1
+          fi
+          echo "All PHP files lint clean."
+
+  syntax-summary:
+    name: Lint summary
+    needs: lint
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Result
+        run: |
+          if [ "${{ needs.lint.result }}" != "success" ]; then
+            echo "::error::PHP lint failed on at least one PHP version."
+            exit 1
+          fi
+          echo "PHP lint passed on all matrix versions."

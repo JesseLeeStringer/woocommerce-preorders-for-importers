@@ -1,0 +1,33 @@
+# Auto-detect text files and normalise line endings to LF in the repo.
+# Working tree on Windows still uses CRLF if core.autocrlf is on; the repo stays canonical.
+* text=auto eol=lf
+
+# Explicit text types — never auto-converted.
+*.php       text eol=lf diff=php
+*.js        text eol=lf
+*.css       text eol=lf
+*.html      text eol=lf
+*.md        text eol=lf
+*.txt       text eol=lf
+*.json      text eol=lf
+*.xml       text eol=lf
+*.yml       text eol=lf
+*.yaml      text eol=lf
+.editorconfig text eol=lf
+.gitattributes text eol=lf
+.gitignore    text eol=lf
+
+# Binary types — no diff/normalisation.
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.zip   binary
+
+# Files that should not ship in a release zip (export-ignore strips them from `git archive`).
+/.github/         export-ignore
+/.editorconfig    export-ignore
+/.gitattributes   export-ignore
+/.gitignore       export-ignore
+/TODO.md          export-ignore

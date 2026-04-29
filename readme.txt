@@ -4,7 +4,7 @@ Tags: woocommerce, preorder, deposit, shipment, import
 Requires at least: 6.4
 Tested up to: 6.6
 Requires PHP: 8.1
-Stable tag: 0.3.0
+Stable tag: 0.3.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -93,6 +93,13 @@ Tested with the WC core extensions and the standard checkout. Action Scheduler i
 6.  WooCommerce → Settings → Preorders configuration tab.
 
 == Changelog ==
+
+= 0.3.1 =
+*   Polish: Elementor group renamed to **POI Preorders**; tags now POI Status / POI Stock / POI Arrival Date.
+*   Polish: `[preorder_stock]` default reformatted as labelled rows separated by `<br />` for easier templating.
+*   Polish: archive button CSS no longer uses `!important` — active theme styles take precedence.
+*   New: `readme.txt` for WordPress.org submission.
+*   Repo: `TODO.md`, `.editorconfig`, `.gitattributes`, GitHub Actions PHP-lint workflow.
 
 = 0.3.0 =
 *   New: archive add-to-cart replaced with **Pre-Orders Available** permalink button (configurable label).
