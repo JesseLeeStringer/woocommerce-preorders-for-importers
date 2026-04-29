@@ -1,0 +1,28 @@
+.wpi-shipment-table {
+	width: 100%;
+	border-collapse: collapse;
+}
+
+.wpi-shipment-table th,
+.wpi-shipment-table td {
+	padding: 8px 10px;
+	border: 1px solid #ddd;
+	vertical-align: middle;
+}
+
+.wpi-shipment-table th {
+	background: #f9f9f9;
+	font-weight: 600;
+}
+
+.wpi-warning {
+	background: #fff3cd;
+	border-left: 4px solid #ffc107;
+	padding: 10px 14px;
+	margin: 10px 0;
+}
+
+.wpi-qty-remaining.negative {
+	color: #c00;
+	font-weight: bold;
+}

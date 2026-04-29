@@ -1,0 +1,26 @@
+.wpi-badge {
+	display: inline-block;
+	background: #2563eb;
+	color: #fff;
+	font-size: 0.75rem;
+	font-weight: 600;
+	padding: 2px 8px;
+	border-radius: 3px;
+	margin-bottom: 6px;
+}
+
+.wpi-preorder-eta {
+	font-size: 0.875rem;
+	color: #555;
+	margin-top: 6px;
+}
+
+.wpi-availability {
+	display: block;
+	font-size: 0.875rem;
+	margin-top: 4px;
+}
+
+.wpi-availability--none {
+	color: #888;
+}
