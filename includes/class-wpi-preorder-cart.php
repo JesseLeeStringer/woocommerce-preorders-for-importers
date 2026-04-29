@@ -7,8 +7,11 @@ if ( ! defined( 'ABSPATH' ) ) {
 class WPI_Preorder_Cart {
 
 	public function __construct() {
+		// Render shipment-choice picker on the product page when admin has enabled it.
+		add_action( 'woocommerce_before_add_to_cart_button', [ $this, 'render_shipment_choice' ], 9 );
+
 		// Attach shipment item ID to cart item when a preorder product is added.
-		add_filter( 'woocommerce_add_cart_item_data', [ $this, 'attach_shipment_item' ], 10, 2 );
+		add_filter( 'woocommerce_add_cart_item_data', [ $this, 'attach_shipment_item' ], 10, 3 );
 
 		// Replace product price with deposit amount in cart.
 		add_action( 'woocommerce_before_calculate_totals', [ $this, 'set_deposit_price' ], 20 );
@@ -16,14 +19,61 @@ class WPI_Preorder_Cart {
 		// Show deposit breakdown in cart item rows.
 		add_filter( 'woocommerce_get_item_data', [ $this, 'display_item_meta' ], 10, 2 );
 
-		// Persist the shipment item ID through to the order item.
+		// Persist the shipment item ID through to the order item, and flag the order as containing a preorder.
 		add_action( 'woocommerce_checkout_create_order_line_item', [ $this, 'save_item_meta_to_order' ], 10, 4 );
 
 		// Show checkout notice when cart contains preorder item(s).
 		add_action( 'woocommerce_before_checkout_form', [ $this, 'checkout_notice' ] );
 	}
 
-	public function attach_shipment_item( array $cart_item_data, int $product_id ): array {
+	/**
+	 * Render a shipment selector on the product page when at least one item allows customer choice.
+	 */
+	public function render_shipment_choice(): void {
+		global $product;
+		if ( ! $product ) {
+			return;
+		}
+		if ( ! WPI_Shipment_Item::product_allows_customer_choice( $product->get_id() ) ) {
+			return;
+		}
+
+		$items = WPI_Shipment_Item::active_for_product( $product->get_id() );
+		$fmt   = get_option( 'wpi_date_format', 'd/m/Y' );
+		echo '<div class="wpi-shipment-choice"><label for="wpi_chosen_shipment_item_id"><strong>' . esc_html__( 'Choose your shipment', 'wpi' ) . '</strong></label><br>';
+		echo '<select name="wpi_chosen_shipment_item_id" id="wpi_chosen_shipment_item_id">';
+		foreach ( $items as $item ) {
+			$label = sprintf(
+				/* translators: 1: release date, 2: deposit amount, 3: remaining qty */
+				__( 'Arrives %1$s — deposit %2$s — %3$d available', 'wpi' ),
+				date_i18n( $fmt, strtotime( $item->release_date() ) ),
+				wp_strip_all_tags( wc_price( $item->deposit_amount() ) ),
+				max( 0, $item->qty_remaining() )
+			);
+			printf(
+				'<option value="%d">%s</option>',
+				(int) $item->id,
+				esc_html( $label )
+			);
+		}
+		echo '</select></div>';
+	}
+
+	public function attach_shipment_item( array $cart_item_data, int $product_id, int $variation_id = 0 ): array {
+		$chosen_id = isset( $_REQUEST['wpi_chosen_shipment_item_id'] ) ? (int) $_REQUEST['wpi_chosen_shipment_item_id'] : 0;
+
+		if ( $chosen_id ) {
+			$chosen = WPI_Shipment_Item::get( $chosen_id );
+			// Validate the chosen item belongs to this product and lives under an active shipment.
+			if ( $chosen && $chosen->product_id === $product_id ) {
+				$shipment = WPI_Shipment::get( $chosen->shipment_id );
+				if ( $shipment && $shipment->status === 'active' ) {
+					$cart_item_data['wpi_shipment_item_id'] = $chosen->id;
+					return $cart_item_data;
+				}
+			}
+		}
+
 		$item = WPI_Shipment_Item::earliest_available_for_product( $product_id );
 		if ( ! $item ) {
 			return $cart_item_data;
@@ -102,6 +152,10 @@ class WPI_Preorder_Cart {
 		$order_item->update_meta_data( '_wpi_full_price', $shipment_item->shipment_price );
 		$order_item->update_meta_data( '_wpi_balance_due', $shipment_item->balance_due() );
 		$order_item->update_meta_data( '_wpi_release_date', $shipment_item->release_date() );
+
+		// Flag the order so downstream filters (e.g. payment_complete_order_status) can see it
+		// before the order is saved.
+		$order->update_meta_data( '_wpi_has_preorder', '1' );
 	}
 
 	public function checkout_notice(): void {

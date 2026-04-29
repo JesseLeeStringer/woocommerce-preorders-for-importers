@@ -6,19 +6,22 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class WPI_Shipment {
 
-	/** @var int */
 	public int $id;
 	public string $reference;
 	public string $due_date;
 	public string $status;
 	public string $notes;
+	public ?int $released_by;
+	public ?string $released_at;
 
 	public function __construct( object $row ) {
-		$this->id        = (int) $row->id;
-		$this->reference = $row->reference;
-		$this->due_date  = $row->due_date;
-		$this->status    = $row->status;
-		$this->notes     = (string) $row->notes;
+		$this->id          = (int) $row->id;
+		$this->reference   = $row->reference;
+		$this->due_date    = $row->due_date;
+		$this->status      = $row->status;
+		$this->notes       = (string) $row->notes;
+		$this->released_by = isset( $row->released_by ) && $row->released_by !== null ? (int) $row->released_by : null;
+		$this->released_at = isset( $row->released_at ) ? $row->released_at : null;
 	}
 
 	// -------------------------------------------------------------------------
@@ -67,32 +70,61 @@ class WPI_Shipment {
 
 	public static function update( int $id, array $data ): void {
 		global $wpdb;
-		$fields = [];
+		$fields  = [];
 		$formats = [];
 
-		if ( isset( $data['reference'] ) ) {
-			$fields['reference'] = sanitize_text_field( $data['reference'] );
-			$formats[] = '%s';
-		}
-		if ( isset( $data['due_date'] ) ) {
-			$fields['due_date'] = $data['due_date'];
-			$formats[] = '%s';
-		}
-		if ( isset( $data['status'] ) ) {
-			$fields['status'] = $data['status'];
-			$formats[] = '%s';
-		}
-		if ( isset( $data['notes'] ) ) {
-			$fields['notes'] = sanitize_textarea_field( $data['notes'] );
-			$formats[] = '%s';
+		$map = [
+			'reference'   => '%s',
+			'due_date'    => '%s',
+			'status'      => '%s',
+			'notes'       => '%s',
+			'released_by' => '%d',
+			'released_at' => '%s',
+		];
+
+		foreach ( $map as $key => $format ) {
+			if ( ! array_key_exists( $key, $data ) ) {
+				continue;
+			}
+			$value = $data[ $key ];
+			if ( in_array( $key, [ 'reference', 'notes' ], true ) ) {
+				$value = $key === 'notes' ? sanitize_textarea_field( $value ) : sanitize_text_field( $value );
+			}
+			$fields[ $key ] = $value;
+			$formats[]      = $format;
 		}
 
 		if ( $fields ) {
 			$wpdb->update( $wpdb->prefix . 'wpi_shipments', $fields, [ 'id' => $id ], $formats, [ '%d' ] );
+			if ( array_key_exists( 'status', $fields ) ) {
+				WPI_Shipment_Item::flush_active_cache();
+			}
 		}
 	}
 
 	public static function set_status( int $id, string $status ): void {
 		self::update( $id, [ 'status' => $status ] );
+	}
+
+	/**
+	 * Mark a shipment as released, recording who and when.
+	 */
+	public static function record_release( int $id, int $user_id ): void {
+		self::update( $id, [
+			'status'      => 'arrived',
+			'released_by' => $user_id,
+			'released_at' => current_time( 'mysql' ),
+		] );
+	}
+
+	/**
+	 * Delete a shipment and cascade-clean dependent rows.
+	 * Stock log entries are preserved but their shipment_id is nulled so audit history survives.
+	 */
+	public static function delete( int $id ): void {
+		global $wpdb;
+		WPI_Shipment_Item::delete_for_shipment( $id );
+		WPI_Stock_Log::nullify_shipment( $id );
+		$wpdb->delete( $wpdb->prefix . 'wpi_shipments', [ 'id' => $id ], [ '%d' ] );
 	}
 }

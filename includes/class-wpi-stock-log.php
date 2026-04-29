@@ -19,18 +19,23 @@ class WPI_Stock_Log {
 		string $notes = ''
 	): void {
 		global $wpdb;
-		$wpdb->insert(
-			$wpdb->prefix . 'wpi_stock_log',
-			[
-				'product_id'  => $product_id,
-				'shipment_id' => $shipment_id,
-				'action'      => $action,
-				'qty_delta'   => $qty_delta,
-				'user_id'     => get_current_user_id(),
-				'notes'       => sanitize_textarea_field( $notes ),
-			],
-			[ '%d', $shipment_id ? '%d' : 'NULL', '%s', '%d', '%d', '%s' ]
-		);
+
+		$data    = [
+			'product_id' => $product_id,
+			'action'     => $action,
+			'qty_delta'  => $qty_delta,
+			'user_id'    => get_current_user_id(),
+			'notes'      => sanitize_textarea_field( $notes ),
+		];
+		$formats = [ '%d', '%s', '%d', '%d', '%s' ];
+
+		// Only include shipment_id when set — letting MySQL keep the column NULL otherwise.
+		if ( $shipment_id !== null ) {
+			$data['shipment_id'] = $shipment_id;
+			$formats[]           = '%d';
+		}
+
+		$wpdb->insert( $wpdb->prefix . 'wpi_stock_log', $data, $formats );
 
 		do_action( 'wpi_stock_log_entry', (int) $wpdb->insert_id, [
 			'product_id'  => $product_id,
@@ -38,6 +43,19 @@ class WPI_Stock_Log {
 			'action'      => $action,
 			'qty_delta'   => $qty_delta,
 		] );
+	}
+
+	/**
+	 * Null out shipment_id on log entries when a shipment is deleted, preserving audit history.
+	 */
+	public static function nullify_shipment( int $shipment_id ): void {
+		global $wpdb;
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$wpdb->query( $wpdb->prepare(
+			"UPDATE {$wpdb->prefix}wpi_stock_log SET shipment_id = NULL WHERE shipment_id = %d",
+			$shipment_id
+		) );
+		// phpcs:enable
 	}
 
 	public static function get_entries( array $filters = [], int $per_page = 50, int $paged = 1 ): array {

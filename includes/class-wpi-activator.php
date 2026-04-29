@@ -7,14 +7,15 @@ if ( ! defined( 'ABSPATH' ) ) {
 class WPI_Activator {
 
 	const DB_VERSION_OPTION = 'wpi_db_version';
-	const DB_VERSION        = '1';
+	const DB_VERSION        = '2';
 
-	public static function activate() {
+	public static function activate(): void {
 		self::create_tables();
+		self::maybe_migrate();
 		update_option( self::DB_VERSION_OPTION, self::DB_VERSION );
 	}
 
-	private static function create_tables() {
+	private static function create_tables(): void {
 		global $wpdb;
 
 		$charset_collate = $wpdb->get_charset_collate();
@@ -22,13 +23,15 @@ class WPI_Activator {
 
 		$sql = "
 		CREATE TABLE {$wpdb->prefix}wpi_shipments (
-			id          INT UNSIGNED NOT NULL AUTO_INCREMENT,
-			reference   VARCHAR(64)  NOT NULL DEFAULT '',
-			due_date    DATE         NOT NULL,
-			status      ENUM('draft','active','arrived','closed') NOT NULL DEFAULT 'draft',
-			notes       TEXT,
-			created_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			updated_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+			id            INT UNSIGNED    NOT NULL AUTO_INCREMENT,
+			reference     VARCHAR(64)     NOT NULL DEFAULT '',
+			due_date      DATE            NOT NULL,
+			status        ENUM('draft','active','arrived','closed') NOT NULL DEFAULT 'draft',
+			notes         TEXT,
+			released_by   BIGINT UNSIGNED NULL,
+			released_at   DATETIME        NULL,
+			created_at    DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at    DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 			PRIMARY KEY (id),
 			KEY status (status),
 			KEY due_date (due_date)
@@ -54,7 +57,7 @@ class WPI_Activator {
 		CREATE TABLE {$wpdb->prefix}wpi_stock_log (
 			id          INT UNSIGNED    NOT NULL AUTO_INCREMENT,
 			product_id  BIGINT UNSIGNED NOT NULL,
-			shipment_id INT UNSIGNED,
+			shipment_id INT UNSIGNED    NULL,
 			action      VARCHAR(64)     NOT NULL DEFAULT '',
 			qty_delta   INT             NOT NULL DEFAULT 0,
 			user_id     BIGINT UNSIGNED NOT NULL DEFAULT 0,
@@ -68,5 +71,29 @@ class WPI_Activator {
 		";
 
 		dbDelta( $sql );
+	}
+
+	/**
+	 * Run idempotent column migrations for installs that pre-date the current DB_VERSION.
+	 * dbDelta normally handles ADD COLUMN, but we keep this as a safety net for the audit columns.
+	 */
+	private static function maybe_migrate(): void {
+		global $wpdb;
+
+		$installed = get_option( self::DB_VERSION_OPTION, '0' );
+		if ( version_compare( $installed, '2', '>=' ) ) {
+			return;
+		}
+
+		$table = $wpdb->prefix . 'wpi_shipments';
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$cols  = $wpdb->get_col( "DESC {$table}", 0 );
+		if ( ! in_array( 'released_by', $cols, true ) ) {
+			$wpdb->query( "ALTER TABLE {$table} ADD COLUMN released_by BIGINT UNSIGNED NULL AFTER notes" );
+		}
+		if ( ! in_array( 'released_at', $cols, true ) ) {
+			$wpdb->query( "ALTER TABLE {$table} ADD COLUMN released_at DATETIME NULL AFTER released_by" );
+		}
+		// phpcs:enable
 	}
 }

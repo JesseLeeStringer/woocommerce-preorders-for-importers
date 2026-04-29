@@ -5,7 +5,7 @@
  * Description:       Shipment-based preorder management for WooCommerce importers. Define inbound shipments, set per-product deposit rules and release dates, enforce quantity caps, and release stock via confirmed manual release only.
  * Author:            Jesse Lee Stringer
  * Author URI:        https://github.com/JesseLeeStringer
- * Version:           0.1.0
+ * Version:           0.2.0
  * Requires at least: 6.4
  * Requires PHP:      8.1
  * WC requires at least: 9.0
@@ -20,7 +20,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'WPI_VERSION', '0.1.0' );
+define( 'WPI_VERSION', '0.2.0' );
 define( 'WPI_PLUGIN_FILE', __FILE__ );
 define( 'WPI_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'WPI_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
@@ -63,6 +63,16 @@ function wpi_init() {
 		require_once WPI_PLUGIN_DIR . 'includes/admin/class-wpi-admin-shipments.php';
 		require_once WPI_PLUGIN_DIR . 'includes/admin/class-wpi-admin-stock-log.php';
 		require_once WPI_PLUGIN_DIR . 'includes/admin/class-wpi-admin-settings.php';
+	}
+
+	if ( defined( 'WP_CLI' ) && WP_CLI ) {
+		require_once WPI_PLUGIN_DIR . 'includes/class-wpi-cli.php';
+	}
+
+	// Run any pending DB migrations on plugin update without waiting for re-activation.
+	require_once WPI_PLUGIN_DIR . 'includes/class-wpi-activator.php';
+	if ( get_option( WPI_Activator::DB_VERSION_OPTION, '0' ) !== WPI_Activator::DB_VERSION ) {
+		WPI_Activator::activate();
 	}
 
 	// Declare HPOS compatibility.

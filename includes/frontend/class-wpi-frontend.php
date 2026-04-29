@@ -10,11 +10,22 @@ class WPI_Frontend {
 		add_filter( 'woocommerce_product_single_add_to_cart_text', [ $this, 'button_label' ], 10, 2 );
 		add_filter( 'woocommerce_product_add_to_cart_text', [ $this, 'button_label' ], 10, 2 );
 		add_action( 'woocommerce_after_add_to_cart_button', [ $this, 'product_page_eta' ] );
+		add_action( 'woocommerce_after_add_to_cart_button', [ $this, 'product_page_availability' ], 11 );
 		add_action( 'woocommerce_after_shop_loop_item_title', [ $this, 'loop_badge' ], 11 );
 		add_action( 'wp_enqueue_scripts', [ $this, 'enqueue' ] );
 	}
 
+	/**
+	 * Quick check using the cached active-product set so we don't hit the DB once per loop iteration.
+	 */
+	private function product_has_preorder( int $product_id ): bool {
+		return in_array( $product_id, WPI_Shipment_Item::products_with_active_shipments(), true );
+	}
+
 	public function button_label( string $label, WC_Product $product ): string {
+		if ( ! $this->product_has_preorder( $product->get_id() ) ) {
+			return $label;
+		}
 		$item = WPI_Shipment_Item::earliest_available_for_product( $product->get_id() );
 		if ( ! $item ) {
 			return $label;
@@ -24,7 +35,7 @@ class WPI_Frontend {
 		$default = sprintf(
 			/* translators: %s: formatted deposit amount */
 			__( 'Pre-Order — Secure with %s deposit', 'wpi' ),
-			$deposit_formatted
+			wp_strip_all_tags( $deposit_formatted )
 		);
 
 		return apply_filters( 'wpi_preorder_button_label', $default, $product, $item );
@@ -32,7 +43,7 @@ class WPI_Frontend {
 
 	public function product_page_eta(): void {
 		global $product;
-		if ( ! $product ) {
+		if ( ! $product || ! $this->product_has_preorder( $product->get_id() ) ) {
 			return;
 		}
 		$item = WPI_Shipment_Item::earliest_available_for_product( $product->get_id() );
@@ -40,10 +51,11 @@ class WPI_Frontend {
 			return;
 		}
 
-		$fmt    = get_option( 'wpi_date_format', 'd/m/Y' );
-		$date   = date_i18n( $fmt, strtotime( $item->release_date() ) );
-		$label  = apply_filters(
+		$fmt   = get_option( 'wpi_date_format', 'd/m/Y' );
+		$date  = date_i18n( $fmt, strtotime( $item->release_date() ) );
+		$label = apply_filters(
 			'wpi_preorder_eta_label',
+			/* translators: %s: formatted release date */
 			sprintf( __( 'Stock arrival expected %s', 'wpi' ), $date ),
 			$item->release_date(),
 			$item
@@ -52,13 +64,21 @@ class WPI_Frontend {
 		echo '<p class="wpi-preorder-eta">' . esc_html( $label ) . '</p>';
 	}
 
-	public function loop_badge(): void {
+	/**
+	 * Show how many units the customer can preorder before they roll over to the next shipment.
+	 * No hard cap — orders may exceed allocation; this is purely informational.
+	 */
+	public function product_page_availability(): void {
 		global $product;
-		if ( ! $product ) {
+		if ( ! $product || ! $this->product_has_preorder( $product->get_id() ) ) {
 			return;
 		}
-		$items = WPI_Shipment_Item::active_for_product( $product->get_id() );
-		if ( ! $items ) {
+		echo do_shortcode( '[wpi_preorder_availability product_id="' . (int) $product->get_id() . '"]' );
+	}
+
+	public function loop_badge(): void {
+		global $product;
+		if ( ! $product || ! $this->product_has_preorder( $product->get_id() ) ) {
 			return;
 		}
 		$badge = apply_filters( 'wpi_preorder_badge_label', get_option( 'wpi_badge_text', __( 'Pre-Order', 'wpi' ) ), $product );
@@ -66,6 +86,10 @@ class WPI_Frontend {
 	}
 
 	public function enqueue(): void {
+		// Only load on WC pages — keeps front-of-house bloat down.
+		if ( ! ( function_exists( 'is_woocommerce' ) && ( is_woocommerce() || is_cart() || is_checkout() || is_account_page() ) ) ) {
+			return;
+		}
 		wp_enqueue_style(
 			'wpi-frontend',
 			WPI_PLUGIN_URL . 'assets/css/frontend.css',

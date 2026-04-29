@@ -7,34 +7,82 @@ if ( ! defined( 'ABSPATH' ) ) {
 class WPI_Release {
 
 	/**
+	 * Compute what a release would do without actually doing it.
+	 * Used by the admin confirmation modal and by the WP-CLI dry-run.
+	 *
+	 * @return array{
+	 *   stock_updates: array<int, array{product_id:int, units_added:int, oversold:int}>,
+	 *   order_count: int,
+	 *   warnings: string[]
+	 * }
+	 */
+	public static function preview_release( int $shipment_id ): array {
+		$shipment = WPI_Shipment::get( $shipment_id );
+		if ( ! $shipment ) {
+			return [ 'stock_updates' => [], 'order_count' => 0, 'warnings' => [] ];
+		}
+
+		$items         = WPI_Shipment_Item::for_shipment( $shipment_id );
+		$stock_updates = [];
+		$warnings      = [];
+
+		foreach ( $items as $item ) {
+			$units_to_add = $item->qty_allocated - $item->qty_preordered;
+			$oversold     = 0;
+
+			if ( $units_to_add < 0 ) {
+				$oversold = abs( $units_to_add );
+				$warnings[] = sprintf(
+					/* translators: 1: product id, 2: preorder qty, 3: allocated qty */
+					__( 'Product #%1$d has %2$d preorders but only %3$d units allocated. The shortfall (%4$d) will need manual resolution.', 'wpi' ),
+					$item->product_id,
+					$item->qty_preordered,
+					$item->qty_allocated,
+					$oversold
+				);
+				$units_to_add = 0;
+			}
+
+			$stock_updates[] = [
+				'product_id'  => $item->product_id,
+				'units_added' => max( 0, $units_to_add ),
+				'oversold'    => $oversold,
+			];
+		}
+
+		$orders      = self::get_orders_for_shipment( $shipment_id );
+		$order_count = count( $orders );
+
+		return compact( 'stock_updates', 'order_count', 'warnings' );
+	}
+
+	/**
 	 * Release a shipment: update stock, move orders to processing, send emails.
 	 *
 	 * @return array{released: int, stock_updates: array, warnings: array}
 	 */
-	public static function release_shipment( int $shipment_id ): array {
+	public static function release_shipment( int $shipment_id, bool $dry_run = false ): array {
 		$shipment = WPI_Shipment::get( $shipment_id );
 		if ( ! $shipment ) {
 			return [ 'released' => 0, 'stock_updates' => [], 'warnings' => [] ];
 		}
 
-		$items        = WPI_Shipment_Item::for_shipment( $shipment_id );
-		$released     = 0;
-		$stock_updates = [];
-		$warnings     = [];
+		$preview = self::preview_release( $shipment_id );
+		if ( $dry_run ) {
+			return [
+				'released'      => $preview['order_count'],
+				'stock_updates' => $preview['stock_updates'],
+				'warnings'      => $preview['warnings'],
+				'dry_run'       => true,
+			];
+		}
+
+		$items    = WPI_Shipment_Item::for_shipment( $shipment_id );
+		$released = 0;
 
 		// 1. Update WooCommerce stock per product.
 		foreach ( $items as $item ) {
-			$units_to_add = $item->qty_allocated - $item->qty_preordered;
-
-			if ( $units_to_add < 0 ) {
-				$warnings[] = sprintf(
-					__( 'Product #%d has %d preorders but only %d units allocated. Manually resolve before finalising.', 'wpi' ),
-					$item->product_id,
-					$item->qty_preordered,
-					$item->qty_allocated
-				);
-				$units_to_add = 0;
-			}
+			$units_to_add = max( 0, $item->qty_allocated - $item->qty_preordered );
 
 			if ( $units_to_add > 0 ) {
 				wc_update_product_stock( $item->product_id, $units_to_add, 'increase' );
@@ -45,20 +93,20 @@ class WPI_Release {
 				WPI_Stock_Log::ACTION_SHIPMENT_RELEASED,
 				$units_to_add,
 				$shipment_id,
-				sprintf( 'Shipment %s released. Allocated: %d, Preordered: %d, Added to stock: %d', $shipment->reference, $item->qty_allocated, $item->qty_preordered, $units_to_add )
+				sprintf(
+					/* translators: 1: shipment ref, 2: allocated, 3: preordered, 4: added */
+					__( 'Shipment %1$s released. Allocated: %2$d, Preordered: %3$d, Added to stock: %4$d', 'wpi' ),
+					$shipment->reference,
+					$item->qty_allocated,
+					$item->qty_preordered,
+					$units_to_add
+				)
 			);
-
-			$stock_updates[] = [
-				'product_id'  => $item->product_id,
-				'units_added' => $units_to_add,
-			];
 		}
 
 		// 2. Release orders tied to this shipment.
 		$orders = self::get_orders_for_shipment( $shipment_id );
 		foreach ( $orders as $order ) {
-			do_action( 'wpi_release_excluded_orders', false, $order->get_id(), $shipment_id );
-
 			$order->update_status( 'processing', __( 'Preorder released — order moved to processing.', 'wpi' ) );
 			$order->update_meta_data( '_wpi_preorder_released', '1' );
 			$order->save();
@@ -67,18 +115,27 @@ class WPI_Release {
 			$released++;
 		}
 
-		// 3. Mark shipment arrived.
-		WPI_Shipment::set_status( $shipment_id, 'arrived' );
+		// 3. Mark shipment arrived and stamp the audit columns.
+		WPI_Shipment::record_release( $shipment_id, get_current_user_id() );
 
-		do_action( 'wpi_shipment_released', $shipment_id, array_map( fn( $o ) => $o->get_id(), $orders ), $stock_updates );
+		do_action(
+			'wpi_shipment_released',
+			$shipment_id,
+			array_map( fn( $o ) => $o->get_id(), $orders ),
+			$preview['stock_updates']
+		);
 
-		return compact( 'released', 'stock_updates', 'warnings' );
+		return [
+			'released'      => $released,
+			'stock_updates' => $preview['stock_updates'],
+			'warnings'      => $preview['warnings'],
+		];
 	}
 
 	private static function get_orders_for_shipment( int $shipment_id ): array {
-		// Find orders containing items tied to this shipment.
 		global $wpdb;
 
+		// Order-item meta still lives in wp_woocommerce_order_itemmeta under HPOS — that table is unaffected.
 		$order_ids = $wpdb->get_col( $wpdb->prepare(
 			"SELECT DISTINCT oi.order_id
 			   FROM {$wpdb->prefix}woocommerce_order_items oi
@@ -92,11 +149,12 @@ class WPI_Release {
 			return [];
 		}
 
+		// Use HPOS-friendly `include` rather than `post__in` so this works under custom_order_tables.
 		return wc_get_orders( [
-			'post__in' => array_map( 'intval', $order_ids ),
-			'status'   => [ 'preorder' ],
-			'limit'    => -1,
-			'return'   => 'objects',
+			'include' => array_map( 'intval', $order_ids ),
+			'status'  => [ 'preorder' ],
+			'limit'   => -1,
+			'return'  => 'objects',
 		] );
 	}
 

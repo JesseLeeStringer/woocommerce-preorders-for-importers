@@ -12,8 +12,14 @@ class WPI_Shortcodes {
 	}
 
 	public function availability( array $atts ): string {
-		$atts = shortcode_atts( [ 'product_id' => 0 ], $atts, 'wpi_preorder_availability' );
+		$atts       = shortcode_atts( [ 'product_id' => 0 ], $atts, 'wpi_preorder_availability' );
 		$product_id = (int) $atts['product_id'];
+		if ( ! $product_id ) {
+			global $product;
+			if ( $product instanceof WC_Product ) {
+				$product_id = $product->get_id();
+			}
+		}
 		if ( ! $product_id ) {
 			return '';
 		}
@@ -28,8 +34,14 @@ class WPI_Shortcodes {
 	}
 
 	public function eta( array $atts ): string {
-		$atts = shortcode_atts( [ 'product_id' => 0 ], $atts, 'wpi_preorder_eta' );
+		$atts       = shortcode_atts( [ 'product_id' => 0 ], $atts, 'wpi_preorder_eta' );
 		$product_id = (int) $atts['product_id'];
+		if ( ! $product_id ) {
+			global $product;
+			if ( $product instanceof WC_Product ) {
+				$product_id = $product->get_id();
+			}
+		}
 		if ( ! $product_id ) {
 			return '';
 		}
@@ -39,10 +51,11 @@ class WPI_Shortcodes {
 			return '';
 		}
 
-		$fmt  = get_option( 'wpi_date_format', 'd/m/Y' );
-		$date = date_i18n( $fmt, strtotime( $item->release_date() ) );
+		$fmt   = get_option( 'wpi_date_format', 'd/m/Y' );
+		$date  = date_i18n( $fmt, strtotime( $item->release_date() ) );
 		$label = apply_filters(
 			'wpi_preorder_eta_label',
+			/* translators: %s: formatted release date */
 			sprintf( __( 'Stock arrival expected %s', 'wpi' ), $date ),
 			$item->release_date(),
 			$item
@@ -52,12 +65,12 @@ class WPI_Shortcodes {
 
 	/** @param WPI_Shipment_Item[] $items */
 	private function build_availability_text( array $items ): string {
-		$fmt          = get_option( 'wpi_date_format', 'd/m/Y' );
-		$primary      = null;
-		$next         = null;
+		$fmt     = get_option( 'wpi_date_format', 'd/m/Y' );
+		$primary = null;
+		$next    = null;
 
 		foreach ( $items as $item ) {
-			if ( $item->qty_preordered < $item->qty_allocated ) {
+			if ( $item->qty_remaining() > 0 ) {
 				if ( ! $primary ) {
 					$primary = $item;
 				} elseif ( ! $next ) {
@@ -65,7 +78,6 @@ class WPI_Shortcodes {
 					break;
 				}
 			} else {
-				// Sold out — candidate for "next shipment" messaging.
 				if ( ! $next && $primary ) {
 					$next = $item;
 				}
@@ -77,7 +89,7 @@ class WPI_Shortcodes {
 		}
 
 		if ( $primary ) {
-			$remaining = $primary->qty_allocated - $primary->qty_preordered;
+			$remaining = $primary->qty_remaining();
 			$sold      = $primary->qty_preordered;
 			$line      = sprintf(
 				/* translators: 1: remaining qty, 2: sold qty */
@@ -92,7 +104,13 @@ class WPI_Shortcodes {
 			);
 			if ( $next ) {
 				$line .= ' ' . sprintf(
-					__( '%d additional units arriving %s — unless sold out earlier.', 'wpi' ),
+					/* translators: 1: qty, 2: arrival date */
+					_n(
+						'%1$d additional unit arriving %2$s — unless sold out earlier.',
+						'%1$d additional units arriving %2$s — unless sold out earlier.',
+						$next->qty_allocated,
+						'wpi'
+					),
 					$next->qty_allocated,
 					date_i18n( $fmt, strtotime( $next->release_date() ) )
 				);
@@ -102,7 +120,13 @@ class WPI_Shortcodes {
 
 		// Primary sold out, next exists.
 		return sprintf(
-			__( 'Sold out — next shipment arriving %s, %d units expected.', 'wpi' ),
+			/* translators: 1: arrival date, 2: qty expected */
+			_n(
+				'Sold out — next shipment arriving %1$s, %2$d unit expected.',
+				'Sold out — next shipment arriving %1$s, %2$d units expected.',
+				$next->qty_allocated,
+				'wpi'
+			),
 			date_i18n( $fmt, strtotime( $next->release_date() ) ),
 			$next->qty_allocated
 		);

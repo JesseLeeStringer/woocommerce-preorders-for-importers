@@ -24,3 +24,16 @@
 .wpi-availability--none {
 	color: #888;
 }
+
+.wpi-shipment-choice {
+	margin: 12px 0;
+	padding: 10px 12px;
+	background: #f8f9fa;
+	border-left: 3px solid #2563eb;
+	border-radius: 3px;
+}
+
+.wpi-shipment-choice select {
+	margin-top: 4px;
+	min-width: 280px;
+}
